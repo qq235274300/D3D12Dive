@@ -353,9 +353,10 @@ namespace chil::app
 		{
 			// the content data 
 			const Vertex cursorVertexData[] = {
-				{{ 0.0f,  0.5f, 0.0f}, {0.5f, 0.0f}},
-			{{ 0.5f, -0.5f, 0.0f}, {1.0f, 1.0f}},
-			{{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f}},
+			{{-0.5f,  0.5f, 0.0f}, {0.0f, 0.0f}}, // 左上
+			{{ 0.5f,  0.5f, 0.0f}, {1.0f, 0.0f}}, // 右上
+			{{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f}}, // 左下
+			{{ 0.5f, -0.5f, 0.0f}, {1.0f, 1.0f}}, // 右下
 			};
 			// set the vertex count 
 			ncursorVertices = (UINT)std::size(cursorVertexData);
@@ -422,6 +423,80 @@ namespace chil::app
 			.SizeInBytes = ncursorVertices * sizeof(Vertex),
 			.StrideInBytes = sizeof(Vertex),
 		};
+		//cursor index
+		ComPtr<ID3D12Resource> cursorIndexBuffer;
+		UINT nCursorIndices;
+		{
+			// the content data  
+			const WORD cursorIndexData[] = {
+				 0, 1, 2,  // 第一个三角形
+				 2, 1, 3   // 第二个三角形
+			};
+			// set the index count  
+			nCursorIndices = (UINT)std::size(cursorIndexData);
+			// create committed resource for index buffer  
+			{
+				const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_DEFAULT };
+				const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(cursorIndexData));
+				device->CreateCommittedResource(
+					&heapProps,
+					D3D12_HEAP_FLAG_NONE,
+					&resourceDesc,
+					D3D12_RESOURCE_STATE_COPY_DEST,
+					nullptr, IID_PPV_ARGS(&cursorIndexBuffer)
+				) >> chk;
+			}
+			// create committed resource for cpu upload of index data  
+			ComPtr<ID3D12Resource> indexUploadBuffer;
+			{
+				const CD3DX12_HEAP_PROPERTIES heapProps{ D3D12_HEAP_TYPE_UPLOAD };
+				const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(cursorIndexData));
+				device->CreateCommittedResource(
+					&heapProps,
+					D3D12_HEAP_FLAG_NONE,
+					&resourceDesc,
+					D3D12_RESOURCE_STATE_GENERIC_READ,
+					nullptr, IID_PPV_ARGS(&indexUploadBuffer)
+				) >> chk;
+			}
+			// copy array of index data to upload buffer  
+			{
+				WORD* mappedIndexData = nullptr;
+				indexUploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndexData)) >> chk;
+				rn::copy(cursorIndexData, mappedIndexData);
+				indexUploadBuffer->Unmap(0, nullptr);
+			}
+			// reset command list and allocator   
+			commandAllocator->Reset() >> chk;
+			commandList->Reset(commandAllocator.Get(), nullptr) >> chk;
+			// copy upload buffer to index buffer  
+			commandList->CopyResource(cursorIndexBuffer.Get(), indexUploadBuffer.Get());
+			// transition index buffer to index buffer state 
+			{
+				const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+					cursorIndexBuffer.Get(),
+					D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+				commandList->ResourceBarrier(1, &barrier);
+			}
+			// close command list   
+			commandList->Close() >> chk;
+			// submit command list to queue as array with single element  
+			ID3D12CommandList* const commandLists[] = { commandList.Get() };
+			commandQueue->ExecuteCommandLists((UINT)std::size(commandLists), commandLists);
+			// insert fence to detect when upload is complete  
+			commandQueue->Signal(fence.Get(), ++fenceValue) >> chk;
+			fence->SetEventOnCompletion(fenceValue, fenceEvent) >> chk;
+			if (WaitForSingleObject(fenceEvent, INFINITE) == WAIT_FAILED) {
+				GetLastError() >> chk;
+			}
+		}
+
+		const D3D12_INDEX_BUFFER_VIEW cursorIndexBufferView{
+		.BufferLocation = cursorIndexBuffer->GetGPUVirtualAddress(),
+		.SizeInBytes = nCursorIndices * sizeof(WORD),
+		.Format = DXGI_FORMAT_R16_UINT,
+		};
+		
 		// create the cube texture 
 		ComPtr<ID3D12Resource> cubeFaceTexture;
 		{
@@ -554,7 +629,7 @@ namespace chil::app
 		{
 			// load image data from disk 
 			DirectX::ScratchImage image;
-			DirectX::LoadFromWICFile(L"cursor.jpeg", DirectX::WIC_FLAGS_NONE, nullptr, image);
+			DirectX::LoadFromWICFile(L"cursor.png", DirectX::WIC_FLAGS_NONE, nullptr, image);
 
 			// generate mip chain 
 			DirectX::ScratchImage mipChain;
@@ -859,21 +934,27 @@ namespace chil::app
 			
 			commandList->IASetVertexBuffers(0, 1, &cursorVertexBufferView);
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			commandList->IASetIndexBuffer(nullptr);
+			commandList->IASetIndexBuffer(&cursorIndexBufferView);
 			//bind cursor texture
 			/*CD3DX12_GPU_DESCRIPTOR_HANDLE cursorSrvHandle(
 				srvHeap->GetGPUDescriptorHandleForHeapStart(), 1, srvDescriptorSize);
 			commandList->SetGraphicsRootDescriptorTable(1, cursorSrvHandle);*/
-
 			commandList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
+			auto ortho = XMMatrixOrthographicOffCenterLH(
+				0.0f, static_cast<float>(width),
+				static_cast<float>(height), 0.0f,
+				0.0f, 1.0f
+			);
 			const auto cursormvp = XMMatrixTranspose(
+				XMMatrixScaling(32.0f / width, 32.0f / height, 1.0f) *
 				XMMatrixTranslation(-1.0f, 0.0f, -8.0f) * viewProjection
 			);
 			commandList->SetGraphicsRoot32BitConstants(0, sizeof(cursormvp) / 4, &cursormvp, 0);
 			//bind cursor texture index 
 			int triangleTextureIndex = 1;
 			commandList->SetGraphicsRoot32BitConstants(2, 1, &triangleTextureIndex, 0);
-			commandList->DrawInstanced(3, 1, 0, 0);
+			//commandList->DrawInstanced(3, 1, 0, 0);
+			commandList->DrawIndexedInstanced(nCursorIndices, 1, 0, 0, 0);
 			// prepare buffer for presentation by transitioning to present state
 			{
 				const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
