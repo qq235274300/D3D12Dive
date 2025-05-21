@@ -822,7 +822,7 @@ namespace chil::app
 			psoDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() };
 			psoDesc.BlendState = {}; // 先初始化为默认（全关闭）
 
-			// ====== 这里是重点：配置透明度混合 ======
+			// ====== 配置透明度混合 ======
 			D3D12_RENDER_TARGET_BLEND_DESC rtBlendDesc = {};
 			rtBlendDesc.BlendEnable = TRUE;
 			rtBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
