@@ -841,6 +841,7 @@ namespace chil::app
 			{
 				// bind the transformation matrix 
 				const auto mvp = XMMatrixTranspose(
+					XMMatrixTranslation(-4.0f, 0.0f, 0.0f) *
 					XMMatrixRotationX(1.0f * t + 1.f) *
 					XMMatrixRotationY(1.2f * t + 2.f) *
 					XMMatrixRotationZ(1.1f * t + 0.f) *
@@ -866,7 +867,7 @@ namespace chil::app
 
 			commandList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
 			const auto cursormvp = XMMatrixTranspose(
-				XMMatrixTranslation(0.0f, 0.0f, -8.0f) * viewProjection
+				XMMatrixTranslation(-1.0f, 0.0f, -8.0f) * viewProjection
 			);
 			commandList->SetGraphicsRoot32BitConstants(0, sizeof(cursormvp) / 4, &cursormvp, 0);
 			//bind cursor texture index 
