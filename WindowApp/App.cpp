@@ -600,7 +600,7 @@ namespace chil::app
 		{
 			const D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc{
 				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-				.NumDescriptors = 5,
+				.NumDescriptors = 2,
 				.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 			};
 			device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap)) >> chk;
@@ -945,10 +945,17 @@ namespace chil::app
 				static_cast<float>(height), 0.0f,
 				0.0f, 1.0f
 			);
+			float cursorX = (width - 32.0f) * 0.5f;
+			float cursorY = (height - 32.0f) * 0.5f;
+			/*const auto cursormvp = XMMatrixTranspose(
+				XMMatrixScaling(32.0f, 32.0f , 1.0f) *
+				XMMatrixTranslation(0, 0, 0.0f) * ortho
+			);*/
+
 			const auto cursormvp = XMMatrixTranspose(
-				XMMatrixScaling(32.0f / width, 32.0f / height, 1.0f) *
-				XMMatrixTranslation(-1.0f, 0.0f, -8.0f) * viewProjection
+				XMMatrixTranslation(-1.0f, 0.0f, -0.0f) * viewProjection
 			);
+
 			commandList->SetGraphicsRoot32BitConstants(0, sizeof(cursormvp) / 4, &cursormvp, 0);
 			//bind cursor texture index 
 			int triangleTextureIndex = 1;
