@@ -525,7 +525,7 @@ namespace chil::app
 		{
 			const D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc{
 				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-				.NumDescriptors = 20,
+				.NumDescriptors = 5,
 				.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 			};
 			device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap)) >> chk;
@@ -860,9 +860,11 @@ namespace chil::app
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			commandList->IASetIndexBuffer(nullptr);
 			//bind cursor texture
-			CD3DX12_GPU_DESCRIPTOR_HANDLE cursorSrvHandle(
+			/*CD3DX12_GPU_DESCRIPTOR_HANDLE cursorSrvHandle(
 				srvHeap->GetGPUDescriptorHandleForHeapStart(), 1, srvDescriptorSize);
-			commandList->SetGraphicsRootDescriptorTable(1, cursorSrvHandle);
+			commandList->SetGraphicsRootDescriptorTable(1, cursorSrvHandle);*/
+
+			commandList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
 			const auto cursormvp = XMMatrixTranspose(
 				XMMatrixTranslation(0.0f, 0.0f, -8.0f) * viewProjection
 			);
