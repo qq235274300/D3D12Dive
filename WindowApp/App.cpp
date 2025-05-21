@@ -525,7 +525,7 @@ namespace chil::app
 		{
 			const D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc{
 				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-				.NumDescriptors = 2,
+				.NumDescriptors = 20,
 				.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 			};
 			device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap)) >> chk;
@@ -656,18 +656,20 @@ namespace chil::app
 				.Texture2D{.MipLevels = cursorTexture->GetDesc().MipLevels}
 			};
 			CD3DX12_CPU_DESCRIPTOR_HANDLE handle1(srvHeap->GetCPUDescriptorHandleForHeapStart(), 1, srvDescriptorSize);
+			
 			device->CreateShaderResourceView(cursorTexture.Get(), &cursorSrvDesc, handle1);
 		}
 		// create root signature 
 		ComPtr<ID3D12RootSignature> rootSignature;
 		{
 			// define root signature with a matrix of 16 32-bit floats used by the vertex shader (mvp matrix) 
-			CD3DX12_ROOT_PARAMETER rootParameters[2]{};
+			CD3DX12_ROOT_PARAMETER rootParameters[3]{};
 			rootParameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 			{
 				//表示有两个SRV
 				const CD3DX12_DESCRIPTOR_RANGE descRange{ D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0 };
-				rootParameters[1].InitAsDescriptorTable(1, &descRange);
+				rootParameters[1].InitAsDescriptorTable(1, &descRange, D3D12_SHADER_VISIBILITY_PIXEL);
+				rootParameters[2].InitAsConstants(1, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 			}
 			// Allow input layout and vertex shader and deny unnecessary access to certain pipeline stages.
 			const D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
@@ -678,7 +680,13 @@ namespace chil::app
 				D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 				D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 			// define static sampler 
-			const CD3DX12_STATIC_SAMPLER_DESC staticSampler{ 0, D3D12_FILTER_MIN_MAG_MIP_LINEAR };
+			 CD3DX12_STATIC_SAMPLER_DESC staticSampler = { };
+			staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+			staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+			staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+			staticSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+			staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+			staticSampler.ShaderRegister = 0;
 			// define root signature with transformation matrix
 			CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
 			rootSignatureDesc.Init(
@@ -749,7 +757,7 @@ namespace chil::app
 			};
 			device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&pipelineState)) >> chk;
 		}
-
+		
 		// define scissor rect 
 		const CD3DX12_RECT scissorRect{ 0, 0, LONG_MAX, LONG_MAX };
 
@@ -760,7 +768,7 @@ namespace chil::app
 		XMMATRIX viewProjection;
 		{
 			// setup view (camera) matrix
-			const auto eyePosition = XMVectorSet(0, 0, -6, 1);
+			const auto eyePosition = XMVectorSet(0, 0, -10, 1);
 			const auto focusPoint = XMVectorSet(0, 0, 0, 1);
 			const auto upDirection = XMVectorSet(0, 1, 0, 0);
 			const auto view = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
@@ -839,20 +847,29 @@ namespace chil::app
 					viewProjection
 				);
 				commandList->SetGraphicsRoot32BitConstants(0, sizeof(mvp) / 4, &mvp, 0);
+
+				int cubeTextureIndex = 0;
+				commandList->SetGraphicsRoot32BitConstants(2, 1, &cubeTextureIndex, 0);
 				// draw the geometry  
 				commandList->DrawIndexedInstanced(nIndices, 1, 0, 0, 0);
 			}
 			//cursor pass 
 			//bind curosr vertexBuffer view
+			
 			commandList->IASetVertexBuffers(0, 1, &cursorVertexBufferView);
+			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			commandList->IASetIndexBuffer(nullptr);
 			//bind cursor texture
 			CD3DX12_GPU_DESCRIPTOR_HANDLE cursorSrvHandle(
 				srvHeap->GetGPUDescriptorHandleForHeapStart(), 1, srvDescriptorSize);
 			commandList->SetGraphicsRootDescriptorTable(1, cursorSrvHandle);
-			const auto triangleMVP = XMMatrixTranspose(                   
-				XMMatrixTranslation(0.f, 0.f, 0.f) * viewProjection);      
-			commandList->SetGraphicsRoot32BitConstants(0, sizeof(triangleMVP) / 4, &triangleMVP, 0);
+			const auto cursormvp = XMMatrixTranspose(
+				XMMatrixTranslation(0.0f, 0.0f, -8.0f) * viewProjection
+			);
+			commandList->SetGraphicsRoot32BitConstants(0, sizeof(cursormvp) / 4, &cursormvp, 0);
+			//bind cursor texture index 
+			int triangleTextureIndex = 1;
+			commandList->SetGraphicsRoot32BitConstants(2, 1, &triangleTextureIndex, 0);
 			commandList->DrawInstanced(3, 1, 0, 0);
 			// prepare buffer for presentation by transitioning to present state
 			{
