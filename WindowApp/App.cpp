@@ -532,9 +532,10 @@ namespace chil::app
 		}
 
 		// create handle to the srv heap and to the only view in the heap 
-		CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(srvHeap->GetCPUDescriptorHandleForHeapStart());
+		
 		//
 		UINT srvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(srvHeap->GetCPUDescriptorHandleForHeapStart(),0,srvDescriptorSize);
 
 		// create the descriptor in the heap 
 		{
@@ -646,22 +647,16 @@ namespace chil::app
 					}
 		}
 
-		ComPtr<ID3D12DescriptorHeap> cursorSrvHeap;
 		// create descriptor heap for cursor texture
 		{
-			const D3D12_DESCRIPTOR_HEAP_DESC desc = {
-				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-				.NumDescriptors = 1,
-				.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-			};
-			device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&cursorSrvHeap)) >> chk;
-			const D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
+			const D3D12_SHADER_RESOURCE_VIEW_DESC cursorSrvDesc = {
 				.Format = cursorTexture->GetDesc().Format,
 				.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
 				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 				.Texture2D{.MipLevels = cursorTexture->GetDesc().MipLevels}
 			};
-			device->CreateShaderResourceView(cursorTexture.Get(), &srvDesc, cursorSrvHeap->GetCPUDescriptorHandleForHeapStart());
+			CD3DX12_CPU_DESCRIPTOR_HANDLE handle1(srvHeap->GetCPUDescriptorHandleForHeapStart(), 1, srvDescriptorSize);
+			device->CreateShaderResourceView(cursorTexture.Get(), &cursorSrvDesc, handle1);
 		}
 		// create root signature 
 		ComPtr<ID3D12RootSignature> rootSignature;
