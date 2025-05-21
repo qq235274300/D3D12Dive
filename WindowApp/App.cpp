@@ -799,7 +799,7 @@ namespace chil::app
 				CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT DSVFormat;
 				CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
 			} pipelineStateStream;
-
+	
 			// define the Vertex input layout 
 			const D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -940,22 +940,24 @@ namespace chil::app
 				srvHeap->GetGPUDescriptorHandleForHeapStart(), 1, srvDescriptorSize);
 			commandList->SetGraphicsRootDescriptorTable(1, cursorSrvHandle);*/
 			commandList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
+			
 			auto ortho = XMMatrixOrthographicOffCenterLH(
 				0.0f, static_cast<float>(width),
-				static_cast<float>(height), 0.0f,
+				0.0f, static_cast<float>(height),
 				0.0f, 1.0f
 			);
-			float cursorX = (width - 32.0f) * 0.5f;
-			float cursorY = (height - 32.0f) * 0.5f;
-			/*const auto cursormvp = XMMatrixTranspose(
-				XMMatrixScaling(32.0f, 32.0f , 1.0f) *
-				XMMatrixTranslation(0, 0, 0.0f) * ortho
-			);*/
-
+			auto scale = XMMatrixScaling(32.0f, 32.0f, 1.0f);
+			float cursorX = width  * 0.5f -16.0f;
+			float cursorY = height  * 0.5f - 16.0f;
+			auto translation = XMMatrixTranslation(cursorX, cursorY, 0.0f);
+			
 			const auto cursormvp = XMMatrixTranspose(
-				XMMatrixTranslation(-1.0f, 0.0f, -0.0f) * viewProjection
+				scale * translation * ortho
 			);
 
+			/*	const auto cursormvp = XMMatrixTranspose(
+					XMMatrixTranslation(-1.0f, 0.0f, -0.0f) * viewProjection
+				);*/
 			commandList->SetGraphicsRoot32BitConstants(0, sizeof(cursormvp) / 4, &cursormvp, 0);
 			//bind cursor texture index 
 			int triangleTextureIndex = 1;
