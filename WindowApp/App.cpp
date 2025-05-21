@@ -809,19 +809,26 @@ namespace chil::app
 			// set pipeline state 
 			commandList->SetPipelineState(pipelineState.Get());
 			commandList->SetGraphicsRootSignature(rootSignature.Get());
+
+			// configure RS 
+			commandList->RSSetViewports(1, &viewport);
+			commandList->RSSetScissorRects(1, &scissorRect);
+			
+			// bind the heap containing the texture descriptor 
+			commandList->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
+			// bind render target and depth
+			commandList->OMSetRenderTargets(1, &rtv, TRUE, &dsvHandle);
+
+			// cube pass 
 			// configure IA 
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 			commandList->IASetIndexBuffer(&indexBufferView);
-			// configure RS 
-			commandList->RSSetViewports(1, &viewport);
-			commandList->RSSetScissorRects(1, &scissorRect);
-			// bind the heap containing the texture descriptor 
-			commandList->SetDescriptorHeaps(1, srvHeap.GetAddressOf());
+			
 			// bind the descriptor table containing the texture descriptor 
 			commandList->SetGraphicsRootDescriptorTable(1, srvHeap->GetGPUDescriptorHandleForHeapStart());
-			// bind render target and depth
-			commandList->OMSetRenderTargets(1, &rtv, TRUE, &dsvHandle);
+			
+		
 			// draw cube #1 
 			{
 				// bind the transformation matrix 
@@ -835,6 +842,18 @@ namespace chil::app
 				// draw the geometry  
 				commandList->DrawIndexedInstanced(nIndices, 1, 0, 0, 0);
 			}
+			//cursor pass 
+			//bind curosr vertexBuffer view
+			commandList->IASetVertexBuffers(0, 1, &cursorVertexBufferView);
+			commandList->IASetIndexBuffer(nullptr);
+			//bind cursor texture
+			CD3DX12_GPU_DESCRIPTOR_HANDLE cursorSrvHandle(
+				srvHeap->GetGPUDescriptorHandleForHeapStart(), 1, srvDescriptorSize);
+			commandList->SetGraphicsRootDescriptorTable(1, cursorSrvHandle);
+			const auto triangleMVP = XMMatrixTranspose(                   
+				XMMatrixTranslation(0.f, 0.f, 0.f) * viewProjection);      
+			commandList->SetGraphicsRoot32BitConstants(0, sizeof(triangleMVP) / 4, &triangleMVP, 0);
+			commandList->DrawInstanced(3, 1, 0, 0);
 			// prepare buffer for presentation by transitioning to present state
 			{
 				const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
